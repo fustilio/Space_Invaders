@@ -84,6 +84,13 @@ class Ship(sprite.Sprite):
         for i in range(len(self.children)):
             self.children[i].fire()
 
+    def destroy(self):
+        for i in range(len(self.children)):
+            print("destroy child: " + str(i))
+            self.children[i].kill()
+        self.update([])
+
+
 
 class Bullet(sprite.Sprite):
     def __init__(self, xpos, ypos, direction, speed, filename, side):
@@ -396,7 +403,9 @@ class SpaceInvaders(object):
 
     def reset(self, score):
         self.player = Ship()
-        self.playerGroup = sprite.Group(self.player)
+        self.playerGroup = sprite.Group()
+        for i in range(len(self.player.children)):
+            self.playerGroup.add(self.player.children[i])
         self.explosionsGroup = sprite.Group()
         self.bullets = sprite.Group()
         self.mysteryShip = Mystery()
@@ -566,8 +575,15 @@ class SpaceInvaders(object):
             self.allSprites.add(newShip)
             self.mysteryGroup.add(newShip)
 
+        player_collision = False
+        collision_target = None
+
         for player in sprite.groupcollide(self.playerGroup, self.enemyBullets,
                                           True, True).keys():
+            player_collision = True
+            collision_target = player
+
+        if player_collision:
             if self.life3.alive():
                 self.life3.kill()
             elif self.life2.alive():
@@ -578,7 +594,8 @@ class SpaceInvaders(object):
                 self.gameOver = True
                 self.startGame = False
             self.sounds['shipexplosion'].play()
-            ShipExplosion(player, self.explosionsGroup)
+            ShipExplosion(collision_target, self.explosionsGroup)
+            collision_target.parent.destroy()
             self.makeNewShip = True
             self.shipTimer = time.get_ticks()
             self.shipAlive = False
@@ -598,7 +615,8 @@ class SpaceInvaders(object):
         if createShip and (currentTime - self.shipTimer > 900):
             self.player = Ship()
             self.allSprites.add(self.player)
-            self.playerGroup.add(self.player)
+            for i in range(len(self.player.children)):
+                self.playerGroup.add(self.player.children[i])
             self.makeNewShip = False
             self.shipAlive = True
 
