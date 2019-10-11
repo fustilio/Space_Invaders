@@ -144,6 +144,9 @@ class Enemy(sprite.Sprite):
         self.images.append(transform.scale(img1, (40, 35)))
         self.images.append(transform.scale(img2, (40, 35)))
 
+class ShipsGroup(sprite.Group):
+    def __init__(self, columns, rows):
+        sprite.Group.__init__(self)
 
 class EnemiesGroup(sprite.Group):
     def __init__(self, columns, rows):
@@ -640,6 +643,7 @@ class SpaceInvaders(object):
 
     def main(self):
         while True:
+            self.screen.blit(self.background, (0, 0))
             if self.mainScreen:
                 self.screen.blit(self.background, (0, 0))
                 self.titleText.draw(self.screen)
