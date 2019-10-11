@@ -32,10 +32,34 @@ IMG_NAMES = ['ship', 'mystery',
 IMAGES = {name: image.load(IMAGE_PATH + '{}.png'.format(name)).convert_alpha()
           for name in IMG_NAMES}
 POSITIONS = [20, 120, 220, 320, 420, 520, 620, 720]
+OFFSETS = [-350, -250, -150, -50, 50, 150, 250, 350]
+DISTRIBUTIONS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 
 BLOCKERS_POSITION = 450
 ENEMY_DEFAULT_POSITION = 65  # Initial value for a new game
 ENEMY_MOVE_DOWN = 35
+
+class SubShip(sprite.Sprite):
+    def __init__(self, parent, id):
+        sprite.Sprite.__init__(self)
+        self.image = IMAGES['ship']
+        self.position = 0
+        self.id = id
+        self.offset = OFFSETS[id]
+        self.parent = parent
+        self.rect = self.image.get_rect(topleft=(self.parent.rect.x + self.offset, 540))
+
+    def update(self):
+        self.rect.x = self.parent.rect.x + self.offset
+        game.screen.blit(self.image, self.rect)
+
+    def fire(self):
+        bullet = Bullet(self.rect.x + 23,
+                        self.rect.y + 5, -1,
+                        15, 'laser', 'center')
+        game.bullets.add(bullet)
+        game.allSprites.add(game.bullets)
+        game.sounds['shoot'].play()
 
 
 class Ship(sprite.Sprite):
@@ -45,9 +69,19 @@ class Ship(sprite.Sprite):
         self.speed = 5
         self.position = 4
         self.rect = self.image.get_rect(topleft=(POSITIONS[self.position], 540))
+        self.children = []
+        for i in range(2):
+            subship = SubShip(self, i + 3)
+            self.children.append(subship)
 
     def update(self, keys, *args):
-        game.screen.blit(self.image, self.rect)
+        # game.screen.blit(self.image, self.rect)
+        for i in range(len(self.children)):
+            self.children[i].update()
+
+    def fire(self):
+        for i in range(len(self.children)):
+            self.children[i].fire()
 
 
 class Bullet(sprite.Sprite):
@@ -427,23 +461,18 @@ class SpaceInvaders(object):
                 if e.key == K_SPACE:
                     if len(self.bullets) == 0 and self.shipAlive:
                         if self.score < 1000:
-                            bullet = Bullet(self.player.rect.x + 23,
-                                            self.player.rect.y + 5, -1,
-                                            15, 'laser', 'center')
-                            self.bullets.add(bullet)
-                            self.allSprites.add(self.bullets)
-                            self.sounds['shoot'].play()
-                        else:
-                            leftbullet = Bullet(self.player.rect.x + 8,
-                                                self.player.rect.y + 5, -1,
-                                                15, 'laser', 'left')
-                            rightbullet = Bullet(self.player.rect.x + 38,
-                                                 self.player.rect.y + 5, -1,
-                                                 15, 'laser', 'right')
-                            self.bullets.add(leftbullet)
-                            self.bullets.add(rightbullet)
-                            self.allSprites.add(self.bullets)
-                            self.sounds['shoot2'].play()
+                            self.player.fire()
+                        # else:
+                        #     leftbullet = Bullet(self.player.rect.x + 8,
+                        #                         self.player.rect.y + 5, -1,
+                        #                         15, 'laser', 'left')
+                        #     rightbullet = Bullet(self.player.rect.x + 38,
+                        #                          self.player.rect.y + 5, -1,
+                        #                          15, 'laser', 'right')
+                        #     self.bullets.add(leftbullet)
+                        #     self.bullets.add(rightbullet)
+                        #     self.allSprites.add(self.bullets)
+                        #     self.sounds['shoot2'].play()
                 elif e.key == K_LEFT:
                     if self.player.position > 0:
                         self.player.position -= 1
