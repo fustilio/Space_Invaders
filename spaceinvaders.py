@@ -38,6 +38,7 @@ DISTRIBUTIONS = [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
 BLOCKERS_POSITION = 450
 ENEMY_DEFAULT_POSITION = 65  # Initial value for a new game
 ENEMY_MOVE_DOWN = 35
+ENEMY_HEALTH = 96
 
 class SubShip(sprite.Sprite):
     def __init__(self, parent, id):
@@ -93,6 +94,7 @@ class Bullet(sprite.Sprite):
         self.direction = direction
         self.side = side
         self.filename = filename
+        self.damage = 48
 
     def update(self, keys, *args):
         game.screen.blit(self.image, self.rect)
@@ -111,14 +113,16 @@ class Enemy(sprite.Sprite):
         self.index = 0
         self.image = self.images[self.index]
         self.rect = self.image.get_rect()
+        self.health = ENEMY_HEALTH
 
     def toggle_image(self):
-        self.index += 1
-        if self.index >= len(self.images):
-            self.index = 0
+        self.index = (self.index + 1) % len(self.images)
         self.image = self.images[self.index]
 
     def update(self, *args):
+        self.image = self.images[self.index].copy()
+        alpha = 255 * self.health / ENEMY_HEALTH
+        self.image.fill((255, 255, 255, alpha), None, BLEND_RGBA_MULT)
         game.screen.blit(self.image, self.rect)
 
     def load_images(self):
@@ -542,12 +546,15 @@ class SpaceInvaders(object):
     def check_collisions(self):
         sprite.groupcollide(self.bullets, self.enemyBullets, True, True)
 
-        for enemy in sprite.groupcollide(self.enemies, self.bullets,
-                                         True, True).keys():
+        col = sprite.groupcollide(self.enemies, self.bullets, False, True)
+        for enemy in col.keys():
             self.sounds['invaderkilled'].play()
-            self.calculate_score(enemy.row)
-            EnemyExplosion(enemy, self.explosionsGroup)
-            self.gameTimer = time.get_ticks()
+            enemy.health -= col[enemy][0].damage
+            if enemy.health <= 0:
+                enemy.kill()
+                self.calculate_score(enemy.row)
+                EnemyExplosion(enemy, self.explosionsGroup)
+                self.gameTimer = time.get_ticks()
 
         for mystery in sprite.groupcollide(self.mysteryGroup, self.bullets,
                                            True, True).keys():
