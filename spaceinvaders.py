@@ -32,8 +32,9 @@ BLUE = (80, 255, 239)
 PURPLE = (203, 0, 255)
 RED = (237, 28, 36)
 
-SCREEN_HEIGHT = 640
-SCREEN = display.set_mode((800, 800))
+#SCREEN_HEIGHT = 640
+SCREEN_HEIGHT = 300
+SCREEN = display.set_mode((800, 640))
 #screen = display.set_mode(WINDOW_SIZE)
 FONT = FONT_PATH + 'space_invaders.ttf'
 IMG_NAMES = ['ship', 'mystery',
@@ -82,6 +83,7 @@ class Ship(sprite.Sprite):
     def fire(self, measuring, measured_ship):
         if measuring:
             if self is measured_ship:
+                print("i am measured ship")
                 bullet = Bullet(self.rect.x + 23,
                                 self.rect.y + 5, -1,
                                 15, 'laser', 'center', 1.0)
@@ -96,13 +98,21 @@ class Ship(sprite.Sprite):
             game.allSprites.add(game.bullets)
             game.sounds['shoot'].play()
 
-    def update_opacity(self, opacity):
+    def update_opacity(self, prob):
         self.image = IMAGES['ship'].copy()
+        opacity = 0
         if self.classical:
-            self.image.fill((255, 255, 255, 255), None, BLEND_RGBA_MULT)
+            opacity = 1
         else:
-            self.image.fill((255, 255, 255, opacity * 255), None, BLEND_RGBA_MULT)
-
+            if prob > 0.75:
+                opacity = 1
+            elif prob > 0.5:
+                opacity = 0.8
+            elif prob > 0.25:
+                opacity = 0.6
+            elif prob > 0.1:
+                opacity = 0.35
+        self.image.fill((255, 255, 255, opacity * 255), None, BLEND_RGBA_MULT)
 
 class ShipGroup(sprite.Group):
     def __init__(self, number_of_ships, position):
@@ -164,7 +174,8 @@ class ShipGroup(sprite.Group):
 
     def update_probabilities(self, probabilities):
         for ship in self:
-            ship.probability = np.linalg.norm(probabilities[ship.id])
+            p_amp = probabilities[ship.id]
+            ship.probability = p_amp.real*p_amp.real + p_amp.imag*p_amp.imag
             ship.update_opacity(ship.probability)
 
     def measure(self, measured_ship_id):
@@ -194,11 +205,14 @@ class Bullet(sprite.Sprite):
         self.side = side
         self.filename = filename
         self.multiplier = multiplier
-        self.damage = BULLET_MAX_DAMAGE * multiplier
+        self.damage = BULLET_MAX_DAMAGE * multiplier + 1  # accounting for floating point issue
 
     def update(self, keys, *args):
         self.image = IMAGES[self.filename].copy()
-        self.image.fill((255, 255, 255, self.multiplier * 255), None, BLEND_RGBA_MULT)
+        alpha = 0
+        if self.multiplier > 0.01: # if alpha is above 0 basically
+            alpha = max(self.multiplier * 255, 128)
+        self.image.fill((255, 255, 255, alpha), None, BLEND_RGBA_MULT)
         game.screen.blit(self.image, self.rect)
         self.rect.y += self.speed * self.direction
         if self.rect.y < 15 or self.rect.y > 650:
@@ -223,7 +237,7 @@ class Enemy(sprite.Sprite):
 
     def update(self, *args):
         self.image = self.images[self.index].copy()
-        alpha = 255 * self.health / ENEMY_HEALTH
+        alpha = max(255 * self.health / ENEMY_HEALTH, 50)
         self.image.fill((255, 255, 255, alpha), None, BLEND_RGBA_MULT)
         game.screen.blit(self.image, self.rect)
 
@@ -284,7 +298,7 @@ class EnemiesGroup(sprite.Group):
                     enemy.toggle_image()
                 self.moveNumber += 1
 
-            self.timer += self.moveTime
+            self.timer = current_time + self.moveTime
 
     def add_internal(self, *sprites):
         super(EnemiesGroup, self).add_internal(*sprites)
@@ -478,6 +492,28 @@ class Labels(object):
             self.labels[i].rect = self.labels[i].surface.get_rect(topleft=((POSITIONS[position] + OFFSETS[i]) % 800, 600))
         for label in self.labels:
             label.draw(screen)
+"""
+class PauseBar(sprite.Sprite):
+    def __init__(self, mystery, score, *groups):
+        self.readytext = Text(FONT, 20, "QUANTUM READY", WHITE,
+                         400, 0)
+        self.text = Text(FONT, 20, "QUANTUM NOT READY", RED,
+                         400, 0)
+        self.timer = time.get_ticks()
+        self.ready = False
+
+    def update(self, current_time, *args):
+        passed = current_time - self.timer
+        if passed <= 600:
+            self.text.draw(game.screen)
+        elif 600 > passed:
+            self.readytext.draw(game.screen)
+            self.ready = True
+            self.timer = currentTime
+    
+    def reset():
+        self.ready = False
+"""
 
 
 class SpaceInvaders(object):
@@ -498,6 +534,9 @@ class SpaceInvaders(object):
         self.titleText = Text(FONT, 50, 'Space Invaders', WHITE, 164, 155)
         self.titleText2 = Text(FONT, 25, 'Press any key to continue', WHITE,
                                201, 225)
+        self.pauseText = Text(FONT, 42, 'Quantum Circuit Composer', WHITE, 50, 155)
+        self.pauseText2 = Text(FONT, 25, 'Press ENTER key to continue', WHITE,
+                               164, 225)
         self.gameOverText = Text(FONT, 50, 'Game Over', WHITE, 250, 270)
         self.nextRoundText = Text(FONT, 50, 'Next Round', WHITE, 240, 270)
         self.enemy1Text = Text(FONT, 25, '   =   10 pts', GREEN, 368, 270)
@@ -516,8 +555,13 @@ class SpaceInvaders(object):
 
         self.circuit_grid_model = CircuitGridModel(3, 10)
         self.circuit_grid = CircuitGrid(0, SCREEN_HEIGHT , self.circuit_grid_model)
+        self.paused = False
+        #self.pause_bar = 0
+        #self.pause_ready = False
+        #self.pause_increment_time = 50
 
         self.labels = Labels()
+        #self.pause_bar = PauseBar()
 
     def reset(self, score):
         self.player = ShipGroup(NUMBER_OF_SHIPS, self.shipPosition)
@@ -635,35 +679,21 @@ class SpaceInvaders(object):
                 self.player.state = ShipState.SUPERPOSITION
                 if e.key == K_ESCAPE:
                     self.running = False
-                elif e.key == K_SPACE:
-                    if len(self.bullets) == 0 and self.shipAlive:
-                        self.player.fire()
-                        # if self.score < 1000:
-                        #     bullet = Bullet(self.player.rect.x + 23,
-                        #                     self.player.rect.y + 5, -1,
-                        #                     15, 'laser', 'center')
-                        #     self.bullets.add(bullet)
-                        #     self.allSprites.add(self.bullets)
-                        #     self.sounds['shoot'].play()
-                        # else:
-                        #     leftbullet = Bullet(self.player.rect.x + 8,
-                        #                         self.player.rect.y + 5, -1,
-                        #                         15, 'laser', 'left')
-                        #     rightbullet = Bullet(self.player.rect.x + 38,
-                        #                          self.player.rect.y + 5, -1,
-                        #                          15, 'laser', 'right')
-                        #     self.bullets.add(leftbullet)
-                        #     self.bullets.add(rightbullet)
-                        #     self.allSprites.add(self.bullets)
-                        #     self.sounds['shoot2'].play()
-                elif e.key == K_o:
-                    if self.player.position >= 0:
-                        self.player.position = (self.player.position - 1) % 8
-                        self.player.update(self.keys)
-                elif e.key == K_p:
-                    if self.player.position <= 7:
-                        self.player.position = (self.player.position + 1) % 8
-                        self.player.update(self.keys)
+                elif e.key == K_RETURN:
+                    print(self.paused)
+                    self.paused = not(self.paused)
+                elif not self.paused:
+                    if e.key == K_SPACE:
+                        if len(self.bullets) == 0 and self.shipAlive:
+                            self.player.fire()
+                    elif e.key == K_o:
+                        if self.player.position >= 0:
+                            self.player.position = (self.player.position - 1) % 8
+                            self.player.update(self.keys)
+                    elif e.key == K_p:
+                        if self.player.position <= 7:
+                            self.player.position = (self.player.position + 1) % 8
+                            self.player.update(self.keys)
                 else:
                     if e.key == K_a:
                         self.circuit_grid.move_to_adjacent_node(MOVE_LEFT)
@@ -702,6 +732,7 @@ class SpaceInvaders(object):
                     state = self.get_probability_amplitudes(circuit, 3, 100)
                     self.player.update_probabilities(state)
                     self.circuit_grid.draw(self.screen)
+                    self.player.update(self.keys)
                     display.flip()
 
     def make_enemies(self):
@@ -914,7 +945,7 @@ class SpaceInvaders(object):
                         self.mainScreen = False
 
             elif self.startGame:
-                if not self.enemies and not self.explosionsGroup:
+                if not self.enemies and not self.explosionsGroup and not self.paused:
                     currentTime = time.get_ticks()
                     if currentTime - self.gameTimer < 3000:
                         self.screen.blit(self.background, (0, 0))
@@ -924,7 +955,7 @@ class SpaceInvaders(object):
                         self.scoreText2.draw(self.screen)
                         self.nextRoundText.draw(self.screen)
                         self.livesText.draw(self.screen)
-                        self.circuit_grid.draw(self.screen)
+                        #self.circuit_grid.draw(self.screen)
                         # self.player.draw(self.screen)
                         self.livesGroup.update()
                         self.check_input()
@@ -935,8 +966,7 @@ class SpaceInvaders(object):
                         self.reset(self.score)
                         self.gameTimer += 3000
                 else:
-                    currentTime = time.get_ticks()
-                    self.play_main_music(currentTime)
+
                     self.screen.blit(self.background, (0, 0))
                     self.allBlockers.update(self.screen)
                     self.scoreText2 = Text(FONT, 20, str(self.score), GREEN,
@@ -944,17 +974,26 @@ class SpaceInvaders(object):
                     self.scoreText.draw(self.screen)
                     self.scoreText2.draw(self.screen)
                     self.livesText.draw(self.screen)
-                    self.circuit_grid.draw(self.screen)
+                    #self.circuit_grid.draw(self.screen)
                     self.labels.update(self.screen, self.player.position)
                     # self.player.draw(self.screen)
                     self.check_input()
-                    self.enemies.update(currentTime)
+                    if not self.paused:
+                        currentTime = time.get_ticks()
+                        self.play_main_music(currentTime)
+                        self.enemies.update(currentTime)
+                        self.make_enemies_shoot()
+                        self.allSprites.update(self.keys, currentTime)
+                        self.explosionsGroup.update(currentTime)
+                        self.check_collisions()
+                        self.create_new_ship(self.makeNewShip, currentTime)
+                    else:
+                        self.pauseText.draw(self.screen)
+                        self.pauseText2.draw(self.screen)
+                        self.circuit_grid.draw(self.screen)
+                        self.player.update(self.keys)
                     # self.ships.update(self.keys)
-                    self.allSprites.update(self.keys, currentTime)
-                    self.explosionsGroup.update(currentTime)
-                    self.check_collisions()
-                    self.create_new_ship(self.makeNewShip, currentTime)
-                    self.make_enemies_shoot()
+                    
 
             elif self.gameOver:
                 currentTime = time.get_ticks()
