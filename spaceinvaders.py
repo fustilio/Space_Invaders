@@ -528,6 +528,10 @@ class SpaceInvaders(object):
         return blockerGroup
 
     def create_audio(self):
+        mixer.init(48000, -16, 1, 1024)
+        mixer.music.load('sounds/SG.mp3')
+        mixer.music.play()
+        mixer.music.set_volume(0.35)
         self.sounds = {}
         for sound_name in ['shoot', 'shoot2', 'invaderkilled', 'mysterykilled',
                            'shipexplosion']:
