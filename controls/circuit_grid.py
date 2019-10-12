@@ -20,7 +20,7 @@ import pygame
 
 from model import circuit_node_types as node_types
 from model.circuit_grid_model import CircuitGridNode
-from utils.colors import BLACK, WHITE, MAGENTA
+from utils.colors import BLACK, WHITE, MAGENTA, GREEN
 from utils.navigation import MOVE_UP, MOVE_DOWN, MOVE_LEFT, MOVE_RIGHT
 from utils.resources import load_image
 from utils.parameters import WIDTH_UNIT, LINE_WIDTH, GRID_HEIGHT, GRID_WIDTH, GATE_TILE_WIDTH, GATE_TILE_HEIGHT
@@ -302,12 +302,12 @@ class CircuitGridBackground(pygame.sprite.Sprite):
         self.image = pygame.Surface([GRID_WIDTH * (18 + 2),
                                      GRID_HEIGHT * (3 + 1)])
         self.image.convert()
-        self.image.fill(WHITE)
+        #self.image.fill(WHITE)
         self.rect = self.image.get_rect()
-        pygame.draw.rect(self.image, BLACK, self.rect, LINE_WIDTH)
+        pygame.draw.rect(self.image, GREEN, self.rect, LINE_WIDTH)
 
         for wire_num in range(circuit_grid_model.max_wires):
-            pygame.draw.line(self.image, BLACK,
+            pygame.draw.line(self.image, GREEN,
                              (GRID_WIDTH * 0.5, (wire_num + 1) * GRID_HEIGHT),
                              (self.rect.width - (GRID_WIDTH * 0.5), (wire_num + 1) * GRID_HEIGHT),
                              LINE_WIDTH)
