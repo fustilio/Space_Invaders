@@ -83,13 +83,13 @@ class Ship(sprite.Sprite):
     def fire(self, measuring, measured_ship):
         if measuring:
             if self is measured_ship:
-                print("i am measured ship")
                 bullet = Bullet(self.rect.x + 23,
                                 self.rect.y + 5, -1,
                                 15, 'laser', 'center', 1.0)
                 game.bullets.add(bullet)
                 game.allSprites.add(game.bullets)
                 game.sounds['shoot'].play()
+
         else:
             bullet = Bullet(self.rect.x + 23,
                             self.rect.y + 5, -1,
@@ -676,21 +676,21 @@ class SpaceInvaders(object):
 
             """
             if e.type == KEYDOWN:
-                self.player.state = ShipState.SUPERPOSITION
                 if e.key == K_ESCAPE:
                     self.running = False
                 elif e.key == K_RETURN:
-                    print(self.paused)
                     self.paused = not(self.paused)
                 elif not self.paused:
                     if e.key == K_SPACE:
                         if len(self.bullets) == 0 and self.shipAlive:
                             self.player.fire()
                     elif e.key == K_o:
+                        self.player.state = ShipState.SUPERPOSITION
                         if self.player.position >= 0:
                             self.player.position = (self.player.position - 1) % 8
                             self.player.update(self.keys)
                     elif e.key == K_p:
+                        self.player.state = ShipState.SUPERPOSITION
                         if self.player.position <= 7:
                             self.player.position = (self.player.position + 1) % 8
                             self.player.update(self.keys)
