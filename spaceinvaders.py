@@ -81,10 +81,17 @@ class Ship(sprite.Sprite):
         game.allSprites.add(game.bullets)
         game.sounds['shoot'].play()
 
-    def update_opacity(self, opacity):
+    def update_opacity(self, prob):
         self.image = IMAGES['ship'].copy()
-        if opacity > 0.01:
-            opacity = max(opacity, 0.22)
+        opacity = 0
+        if prob > 0.75:
+            opacity = 1
+        elif prob > 0.5:
+            opacity = 0.8
+        elif prob > 0.25:
+            opacity = 0.6
+        elif prob > 0.1:
+            opacity = 0.35
         self.image.fill((255, 255, 255, opacity * 255), None, BLEND_RGBA_MULT)
 
 
