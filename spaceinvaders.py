@@ -8,6 +8,7 @@ import sys
 from os.path import abspath, dirname
 from random import choice
 import numpy as np
+from enum import Enum
 
 from model.circuit_grid_model import CircuitGridModel
 from controls.circuit_grid import CircuitGrid, CircuitGridNode
@@ -59,6 +60,10 @@ ENEMY_HEALTH = 96
 
 BULLET_MAX_DAMAGE = 96
 
+class ShipState(Enum):
+    SUPERPOSITION = 0
+    MEASURED = 1
+
 
 class Ship(sprite.Sprite):
     def __init__(self, id):
@@ -69,31 +74,45 @@ class Ship(sprite.Sprite):
         self.image.fill((255, 255, 255, self.probability * 500), None, BLEND_RGBA_MULT)
         self.speed = 5
         self.rect = self.image.get_rect(topleft=(POSITIONS[self.id], 540))
+        self.classical = False
 
     def update(self, *args):
+        self.update_opacity(self.probability)
         game.screen.blit(self.image, self.rect)
 
-    def fire(self):
-        bullet = Bullet(self.rect.x + 23,
-                        self.rect.y + 5, -1,
-                        15, 'laser', 'center', self.probability)
-        game.bullets.add(bullet)
-        game.allSprites.add(game.bullets)
-        game.sounds['shoot'].play()
+    def fire(self, measuring, measured_ship):
+        if measuring:
+            if self is measured_ship:
+                bullet = Bullet(self.rect.x + 23,
+                                self.rect.y + 5, -1,
+                                15, 'laser', 'center', 1.0)
+                game.bullets.add(bullet)
+                game.allSprites.add(game.bullets)
+                game.sounds['shoot'].play()
+
+        else:
+            bullet = Bullet(self.rect.x + 23,
+                            self.rect.y + 5, -1,
+                            15, 'laser', 'center', self.probability)
+            game.bullets.add(bullet)
+            game.allSprites.add(game.bullets)
+            game.sounds['shoot'].play()
 
     def update_opacity(self, prob):
         self.image = IMAGES['ship'].copy()
         opacity = 0
-        if prob > 0.75:
+        if self.classical:
             opacity = 1
-        elif prob > 0.5:
-            opacity = 0.8
-        elif prob > 0.25:
-            opacity = 0.6
-        elif prob > 0.1:
-            opacity = 0.35
+        else:
+            if prob > 0.75:
+                opacity = 1
+            elif prob > 0.5:
+                opacity = 0.8
+            elif prob > 0.25:
+                opacity = 0.6
+            elif prob > 0.1:
+                opacity = 0.35
         self.image.fill((255, 255, 255, opacity * 255), None, BLEND_RGBA_MULT)
-
 
 class ShipGroup(sprite.Group):
     def __init__(self, number_of_ships, position):
@@ -101,9 +120,10 @@ class ShipGroup(sprite.Group):
         self.ships = [None] * number_of_ships
         self.number_of_ships = number_of_ships
         self.position = position
-        self.hit_ship = None
+        self.measured_ship = None
         self.measuring = False
         self.timer = 0.0
+        self.state = ShipState.SUPERPOSITION
 
     def update(self, keys, *args):
         passed = time.get_ticks() - self.timer
@@ -111,9 +131,16 @@ class ShipGroup(sprite.Group):
             self.measuring = False
 
         for ship in self:
-            ship.rect.x = (OFFSETS[ship.id] + POSITIONS[self.position]) % 800
-            if not self.measuring:
-                ship.update_opacity(ship.probability)
+            if self.state == ShipState.SUPERPOSITION:
+                ship.classical = False
+                ship.rect.x = (OFFSETS[ship.id] + POSITIONS[self.position]) % 800
+            elif self.state == ShipState.MEASURED:
+                if ship == self.measured_ship:
+                    ship.classical = True
+                    ship.rect.x = (OFFSETS[ship.id] + POSITIONS[self.position]) % 800
+                else:
+                    ship.rect.x = 999999999
+            ship.update_opacity(ship.probability)
             ship.update()
 
     def add_internal(self, *sprites):
@@ -128,18 +155,18 @@ class ShipGroup(sprite.Group):
 
     def fire(self):
         for ship in self:
-            ship.fire()
+            ship.fire(self.state == ShipState.MEASURED, self.measured_ship)
 
     def kill(self, ship):
         self.ships[ship.id] = None
 
-    def explode_ships(self, explosionsGroup, hit_ship_id):
+    def explode_ships(self, explosionsGroup, measured_ship_id):
         for ship in self.ships:
             if ship is not None:
-                if ship.id == hit_ship_id:
+                if ship.id == measured_ship_id:
                     ship.update_opacity(1.0)
                     ship.update()
-                    self.hit_ship = ship
+                    self.measured_ship = ship
                 else:
                     ship.kill()
 
@@ -151,24 +178,22 @@ class ShipGroup(sprite.Group):
             ship.probability = p_amp.real*p_amp.real + p_amp.imag*p_amp.imag
             ship.update_opacity(ship.probability)
 
-    def measure(self, hit_ship_id):
+    def measure(self, measured_ship_id):
         for ship in self.ships:
             if ship is not None:
-                if ship.id == hit_ship_id:
-                    ship.update_opacity(1.0)
-                    self.hit_ship = ship
-                else:
-                    ship.update_opacity(0.0)
-                    ship.rect.x = 999999
-                ship.update()
+                if ship.id == measured_ship_id:
+                    self.measured_ship = ship
         self.measuring = True
         self.timer = time.get_ticks()
+        self.state = ShipState.MEASURED
+        self.update([])
 
     def draw(self, screen):
         for ship in self.ships:
             if ship is not None and ship is Ship:
                 text = Text(FONT, 50, '000', WHITE, 50, 50)
                 text.draw(screen)
+
 
 class Bullet(sprite.Sprite):
     def __init__(self, xpos, ypos, direction, speed, filename, side, multiplier=1.0):
@@ -654,17 +679,18 @@ class SpaceInvaders(object):
                 if e.key == K_ESCAPE:
                     self.running = False
                 elif e.key == K_RETURN:
-                    print(self.paused)
                     self.paused = not(self.paused)
                 elif not self.paused:
                     if e.key == K_SPACE:
                         if len(self.bullets) == 0 and self.shipAlive:
                             self.player.fire()
                     elif e.key == K_o:
+                        self.player.state = ShipState.SUPERPOSITION
                         if self.player.position >= 0:
                             self.player.position = (self.player.position - 1) % 8
                             self.player.update(self.keys)
                     elif e.key == K_p:
+                        self.player.state = ShipState.SUPERPOSITION
                         if self.player.position <= 7:
                             self.player.position = (self.player.position + 1) % 8
                             self.player.update(self.keys)
@@ -797,16 +823,34 @@ class SpaceInvaders(object):
 
         hits = sprite.groupcollide(self.playerGroup, self.enemyBullets,
                                           False, True)
-        measured = False
+        self.player.measuring = False
 
-        for ship in hits:
-            if not measured and ship.probability > 0.0:
-                self.player.measure(state)
-                measured = True
+        if self.player.state == ShipState.SUPERPOSITION:
+            for ship in hits:
+                if ship.probability > 0.0:
+                    self.player.measure(state)
+                if state == ship.id:  # quantum case
+                    if not collision_handled:
+                        if self.life3.alive():
+                            self.life3.kill()
+                        elif self.life2.alive():
+                            self.life2.kill()
+                        elif self.life1.alive():
+                            self.life1.kill()
+                        else:
+                            self.gameOver = True
+                            self.startGame = False
+                        self.sounds['shipexplosion'].play()
+                        self.player.explode_ships(self.explosionsGroup, ship.id)
+                        self.makeNewShip = True
+                        self.shipPosition = self.player.position
+                        self.shipTimer = time.get_ticks()
+                        self.shipAlive = False
 
-            if state == ship.id:
-                # for bullet in hits[ship]:
-                #     bullet.kill()
+                        collision_handled = True
+        elif self.player.state == ShipState.MEASURED:
+            for ship in hits:
+                print("collision detected, state is MEASURED")
                 if not collision_handled:
                     if self.life3.alive():
                         self.life3.kill()
@@ -818,16 +862,19 @@ class SpaceInvaders(object):
                         self.gameOver = True
                         self.startGame = False
                     self.sounds['shipexplosion'].play()
-                    self.player.explode_ships(self.explosionsGroup, ship.id)
-                    # for ships in self.playerGroup:
-                    #     for ship in ships:
-                    #         ShipExplosion(ship, self.explosionsGroup)
+                    self.player.explode_ships(self.explosionsGroup, -1)
                     self.makeNewShip = True
                     self.shipPosition = self.player.position
                     self.shipTimer = time.get_ticks()
                     self.shipAlive = False
 
                     collision_handled = True
+
+        # for ship in hits:
+        #     if not self.player.measuring and ship.probability > 0.0:
+        #         self.player.measure(state)
+        #         self.player.measuring = True
+
 
         if self.enemies.bottom >= 540:
             sprite.groupcollide(self.enemies, self.playerGroup, True, True)
@@ -851,8 +898,8 @@ class SpaceInvaders(object):
             self.makeNewShip = False
             self.shipAlive = True
         elif createShip and (currentTime - self.shipTimer > 300):
-            if self.player.hit_ship:
-                self.player.hit_ship.kill()
+            if self.player.measured_ship:
+                self.player.measured_ship.kill()
 
     def create_game_over(self, currentTime):
         self.screen.blit(self.background, (0, 0))
